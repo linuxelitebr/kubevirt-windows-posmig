@@ -1,0 +1,39 @@
+spec:
+  template:
+    spec:
+      terminationGracePeriodSeconds: 3600
+      domain:
+        features:
+          acpi: {}
+          apic: {}
+          hyperv:
+            relaxed: {}
+            vapic: {}
+            vpindex: {}
+            synic: {}
+            synictimer:
+              direct: {}
+            spinlocks:
+              spinlocks: 8191
+            tlbflush: {}
+            ipi: {}
+            runtime: {}
+            reset: {}
+            frequencies: {}
+            reenlightenment: {}
+        clock:
+          utc: {}
+          timer:
+            hpet:
+              present: false
+            pit:
+              tickPolicy: delay
+            rtc:
+              tickPolicy: catchup
+            hyperv: {}
+        ioThreadsPolicy: auto
+        devices:
+          inputs:
+            - name: tablet
+              type: tablet
+              bus: usb

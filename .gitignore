@@ -1,0 +1,8 @@
+# midia de drivers (voce traz a sua)
+*.msi
+*.zip
+virtio-win*/
+# artefatos de teste / scratch
+*.log
+*.state
+.DS_Store
