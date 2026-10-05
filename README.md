@@ -92,16 +92,16 @@ A ferramenta `guest-run` dirige tudo. Ela NÃO vem neste repo: baixe o binário 
 releases e deixe acessível como `guest-run`.
 
 1. Baixe o asset do seu SO/arquitetura em
-   https://github.com/linuxelitebr/kubevirt-guest-run/releases (versão 0.2.0 ou mais
-   nova, que tem o `-put`). Os nomes são assim:
+   https://github.com/linuxelitebr/kubevirt-guest-run/releases (versão 0.3.0 ou mais
+   nova, que tem o `-put` e o `-put-dir`). Os nomes são assim:
 
 | SO / arquitetura | Asset |
 | --- | --- |
-| Linux x86_64 | `guest-run_0.2.0_linux_amd64.tar.gz` |
-| Linux ARM64 | `guest-run_0.2.0_linux_arm64.tar.gz` |
-| macOS Intel | `guest-run_0.2.0_darwin_amd64.tar.gz` |
-| macOS Apple Silicon | `guest-run_0.2.0_darwin_arm64.tar.gz` |
-| Windows x86_64 | `guest-run_0.2.0_windows_amd64.zip` |
+| Linux x86_64 | `guest-run_0.3.0_linux_amd64.tar.gz` |
+| Linux ARM64 | `guest-run_0.3.0_linux_arm64.tar.gz` |
+| macOS Intel | `guest-run_0.3.0_darwin_amd64.tar.gz` |
+| macOS Apple Silicon | `guest-run_0.3.0_darwin_arm64.tar.gz` |
+| Windows x86_64 | `guest-run_0.3.0_windows_amd64.zip` |
 
 2. Extraia. Dentro vem o binário, chamado **`guest-run`** (no Windows,
    **`guest-run.exe`**), mais LICENSE e README.
@@ -109,9 +109,9 @@ releases e deixe acessível como `guest-run`.
 3. Deixe o binário chamado `guest-run` numa pasta do PATH:
 
 ```bash
-tar xzf guest-run_0.2.0_linux_amd64.tar.gz
-sudo install guest-run_0.2.0_linux_amd64/guest-run /usr/local/bin/guest-run
-guest-run -version   # deve imprimir: guest-run 0.2.0
+tar xzf guest-run_0.3.0_linux_amd64.tar.gz
+sudo install guest-run_0.3.0_linux_amd64/guest-run /usr/local/bin/guest-run
+guest-run -version   # deve imprimir: guest-run 0.3.0
 ```
 
 No Windows, copie `guest-run.exe` pra uma pasta que esteja no `Path` (ou adicione a
@@ -136,30 +136,29 @@ guest-run -n NS -vm VM -put ./posmig-openshift-windows.ps1 -dest 'C:\Windows\Tem
 
 ### Copiar um diretório inteiro pra VM
 
-O `-put` leva um arquivo por vez. Pra um diretório inteiro, o jeito que funciona
-sem drama: zipa local, empurra o zip, expande na VM. O `Expand-Archive` do
-PowerShell (5+) só lê `.zip`, então nada de `.tar.gz` aqui.
+O jeito direto é o `-put-dir`: num comando só ele zipa o diretório local (sem
+precisar do `zip` instalado), empurra e expande na VM com `Expand-Archive`. O
+`-dest` é a pasta que vai receber o conteúdo (guest Windows). Precisa do
+guest-run 0.3.0+.
 
 ```bash
-# 1) zipa o diretorio local (gera meudir.zip)
-cd /caminho/pai && zip -r /tmp/meudir.zip meudir
-
-# 2) empurra o zip (arquivo unico)
-guest-run -n NS -vm VM -timeout 1800s -put /tmp/meudir.zip -dest 'C:\Windows\Temp\meudir.zip'
-
-# 3) expande dentro da VM (destino a seu criterio)
-guest-run -n NS -vm VM -ps 'Expand-Archive -Path C:\Windows\Temp\meudir.zip -DestinationPath C:\destino\meudir -Force'
-
-# 4) confere
-guest-run -n NS -vm VM -ps 'Get-ChildItem -Recurse C:\destino\meudir | Select-Object -First 20 FullName'
+guest-run -n NS -vm VM -timeout 1800s -put-dir ./meudir -dest 'C:\destino\meudir'
 ```
 
-Pra poucos arquivos, dá pra pular o zip e empurrar um por um: o `-put` cria a
-pasta de destino sozinho se ela não existir.
+Num guest-run mais antigo (ou se preferir na mão), o mesmo em três passos: zipa
+local, empurra o zip com `-put`, expande na VM. O `Expand-Archive` só lê `.zip`,
+nada de `.tar.gz`.
+
+```bash
+cd /caminho/pai && zip -r /tmp/meudir.zip meudir
+guest-run -n NS -vm VM -timeout 1800s -put /tmp/meudir.zip -dest 'C:\Windows\Temp\meudir.zip'
+guest-run -n NS -vm VM -ps 'Expand-Archive -Path C:\Windows\Temp\meudir.zip -DestinationPath C:\destino\meudir -Force'
+```
+
+Pra poucos arquivos, o `-put` cria a pasta de destino sozinho:
 
 ```bash
 guest-run -n NS -vm VM -put ./meudir/app.config -dest 'C:\destino\meudir\app.config'
-guest-run -n NS -vm VM -put ./meudir/bin/run.exe -dest 'C:\destino\meudir\bin\run.exe'
 ```
 
 ## Como cada ação é chamada
