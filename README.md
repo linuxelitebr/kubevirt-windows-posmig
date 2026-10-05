@@ -1,4 +1,4 @@
-# Runbook: preparar VM Windows migrada, por fora, via guest-run
+# Runbook: preparar VM Windows migrada via guest-run
 
 Prepara uma VM Windows recém-migrada do VMware pro OpenShift Virtualization, sem
 logar na VM, pelo canal do qemu-guest-agent. Duas partes: o trabalho DENTRO da VM
