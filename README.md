@@ -1,9 +1,8 @@
 # Runbook: preparar VM Windows migrada via guest-run
 
-Prepara uma VM Windows recém-migrada do VMware pro OpenShift Virtualization, sem
-logar na VM, pelo canal do qemu-guest-agent. Duas partes: o trabalho DENTRO da VM
-(remover VMware Tools, pagefile, drivers, MTU) e o tuning no CLUSTER
-(enlightenments Hyper-V).
+Prepara uma VM Windows recém-migrada do VMware pro OpenShift Virtualization pelo 
+canal do qemu-guest-agent. Duas partes: o trabalho DENTRO da VM (remover VMware 
+Tools, pagefile, drivers, MTU) e o tuning no CLUSTER (enlightenments Hyper-V).
 
 ## Conteúdo do kit
 
