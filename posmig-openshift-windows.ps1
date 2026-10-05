@@ -321,6 +321,15 @@ function Export-PageFileConfig {
             Write-Log 'Nenhum arquivo de paginacao explicito encontrado (possivelmente gerenciado automaticamente).' -Level Warning
         }
 
+        # Nada a preservar (sem pagefile e auto-manage ja off): NAO grava, para
+        # nao sobrescrever um backup anterior valido (ex.: no disable duplo).
+        if ((-not $exportData.AutomaticManagedPagefile) -and (@($exportData.PageFiles).Count -eq 0)) {
+            Write-Log 'Nada a preservar; backup NAO gravado (preserva um backup anterior valido).' -Level Info
+            return
+        }
+        # Config real a salvar: limpa backups antigos (de runs anteriores) para
+        # o Enable sempre carregar ESTE estado, e nao um backup velho.
+        Get-ChildItem 'C:\Windows\Temp\pagefile_config_backup_*.json' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
         $exportData | ConvertTo-Json -Depth 5 | Set-Content -Path $exportPath -Encoding UTF8 -Force
         Write-Log "Backup da configuracao do arquivo de paginacao exportado para: $exportPath" -Level Success
     }
@@ -395,6 +404,7 @@ function Disable-WindowsPagingFile {
 function Enable-WindowsPagingFile {
     $regPageFilePath = 'HKLM:\SYSTEM\CurrentControlSet\Control\Session Manager\Memory Management'
     Write-Log '=== Ativando arquivo de paginacao do Windows ===' -Level Info
+    $pagingWritten = $false
 
     $backup = Get-PageFileBackup
     if ($backup) {
@@ -426,6 +436,7 @@ function Enable-WindowsPagingFile {
 
             Set-ItemProperty -Path $regPageFilePath -Name 'PagingFiles' -Value @("$defaultPageFile 0 0") -Type MultiString -ErrorAction Stop
             Write-Log "Chave 'PagingFiles' configurada para tamanho gerenciado pelo sistema: $defaultPageFile" -Level Success
+            $pagingWritten = $true
 
             try {
                 Set-ItemProperty -Path $regPageFilePath -Name 'ExistingPageFiles' -Value @($defaultPageFile) -Type MultiString -ErrorAction SilentlyContinue
@@ -508,11 +519,18 @@ function Enable-WindowsPagingFile {
 
             Set-ItemProperty -Path $regPageFilePath -Name 'PagingFiles' -Value $pagingValues -Type MultiString -ErrorAction Stop
             Write-Log "Chave 'PagingFiles' configurada no registro com $($pagingValues.Count) entrada(s)." -Level Success
+        $pagingWritten = $true
         }
     }
     catch {
-        Write-Log "Erro critico ao ativar o arquivo de paginacao: $($_.Exception.Message)" -Level Error
-        throw
+        if ($pagingWritten) {
+            Write-Log "Aviso apos gravar o registro (provavel WMI, nao-fatal): $($_.Exception.Message)" -Level Warning
+            Write-Log 'A chave PagingFiles ja foi gravada (fonte da verdade, aplicada no boot); seguindo.' -Level Info
+        }
+        else {
+            Write-Log "Erro critico: a chave PagingFiles NAO foi gravada: $($_.Exception.Message)" -Level Error
+            throw
+        }
     }
 
 
@@ -533,6 +551,9 @@ function Enable-WindowsPagingFile {
         Write-Log 'Aviso: a confirmacao imediata via WMI pode nao ter refletido ainda. A configuracao sera aplicada apos a reinicializacao.' -Level Warning
     }
 
+    if ($pagingWritten) {
+        Get-ChildItem 'C:\Windows\Temp\pagefile_config_backup_*.json' -ErrorAction SilentlyContinue | Remove-Item -Force -ErrorAction SilentlyContinue
+    }
     Write-Log 'A alteracao sera aplicada integralmente apos a reinicializacao.' -Level Warning
 }
 
