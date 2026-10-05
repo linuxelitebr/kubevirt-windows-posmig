@@ -134,6 +134,34 @@ Convenção abaixo: `NS` = namespace, `VM` = nome da VM.
 guest-run -n NS -vm VM -put ./posmig-openshift-windows.ps1 -dest 'C:\Windows\Temp\posmig.ps1'
 ```
 
+### Copiar um diretório inteiro pra VM
+
+O `-put` leva um arquivo por vez. Pra um diretório inteiro, o jeito que funciona
+sem drama: zipa local, empurra o zip, expande na VM. O `Expand-Archive` do
+PowerShell (5+) só lê `.zip`, então nada de `.tar.gz` aqui.
+
+```bash
+# 1) zipa o diretorio local (gera meudir.zip)
+cd /caminho/pai && zip -r /tmp/meudir.zip meudir
+
+# 2) empurra o zip (arquivo unico)
+guest-run -n NS -vm VM -timeout 1800s -put /tmp/meudir.zip -dest 'C:\Windows\Temp\meudir.zip'
+
+# 3) expande dentro da VM (destino a seu criterio)
+guest-run -n NS -vm VM -ps 'Expand-Archive -Path C:\Windows\Temp\meudir.zip -DestinationPath C:\destino\meudir -Force'
+
+# 4) confere
+guest-run -n NS -vm VM -ps 'Get-ChildItem -Recurse C:\destino\meudir | Select-Object -First 20 FullName'
+```
+
+Pra poucos arquivos, dá pra pular o zip e empurrar um por um: o `-put` cria a
+pasta de destino sozinho se ela não existir.
+
+```bash
+guest-run -n NS -vm VM -put ./meudir/app.config -dest 'C:\destino\meudir\app.config'
+guest-run -n NS -vm VM -put ./meudir/bin/run.exe -dest 'C:\destino\meudir\bin\run.exe'
+```
+
 ## Como cada ação é chamada
 
 O exit code da ação volta pelo guest-run. O padrão de invocação que propaga o
