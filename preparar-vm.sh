@@ -27,6 +27,7 @@
 #   --download-url URL    URL base alternativa para a fonte URL
 #   --local-media-path P  pasta na VM com o MSI/EXE ja' colocado (fonte Local)
 #   --high-traffic        aplica tambem o tuning de multiqueue (VM de alto trafego)
+#   --run-strategy X      no fim, define spec.runStrategy (Always|RerunOnFailure|Manual|Halted)
 #   --script ARQ          o .ps1 (padrao: posmig-openshift-windows.ps1 ao lado)
 #   --context CTX         contexto do oc/virtctl
 #   --fresh               ignora o state-file e comeca do zero
@@ -38,11 +39,11 @@ set -euo pipefail
 HERE="$(cd "$(dirname "$0")" && pwd)"
 NS=""; VM=""; CTX=""; YES=0; DRIVERS=0; HIGH=0; FRESH=0
 MEDIA_SOURCE="Auto"; MEDIA_FILE=""
-NAS_PATH=""; DOWNLOAD_URL=""; LOCAL_MEDIA_PATH=""
+NAS_PATH=""; DOWNLOAD_URL=""; LOCAL_MEDIA_PATH=""; RUN_STRATEGY=""
 SCRIPT_PS="$HERE/posmig-openshift-windows.ps1"
 TUNER="$HERE/aplicar-tuning.sh"
 
-usage() { sed -n '2,34p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 log()  { echo ">> $*"; }
 warn() { echo "!! $*" >&2; }
 die()  { echo "ERRO: $*" >&2; exit 1; }
@@ -58,6 +59,7 @@ while [ $# -gt 0 ]; do
     --nas-path)     NAS_PATH="$2"; shift 2 ;;
     --download-url) DOWNLOAD_URL="$2"; shift 2 ;;
     --local-media-path) LOCAL_MEDIA_PATH="$2"; shift 2 ;;
+    --run-strategy) RUN_STRATEGY="$2"; shift 2 ;;
     --high-traffic) HIGH=1; shift ;;
     --script)       SCRIPT_PS="$2"; shift 2 ;;
     --context)      CTX="$2"; shift 2 ;;
@@ -67,6 +69,12 @@ while [ $# -gt 0 ]; do
   esac
 done
 [ -n "$NS" ] && [ -n "$VM" ] || { echo "faltou -n NS e/ou -vm NOME" >&2; usage 2; }
+if [ -n "$RUN_STRATEGY" ]; then
+  case "$RUN_STRATEGY" in
+    Always|RerunOnFailure|Manual|Halted) ;;
+    *) echo "--run-strategy invalido: '$RUN_STRATEGY' (use Always|RerunOnFailure|Manual|Halted)" >&2; exit 2 ;;
+  esac
+fi
 
 # HIGH e' 0/1 (string): nao usar ${HIGH:+...}, porque "0" e' nao-vazio e dispara.
 TUNEARG=""; MQ=""
@@ -174,6 +182,7 @@ build_plan() {
   echo "    - EnablePageFile"
   echo "    - Tuning Hyper-V (baseline$MQ): patch via aplicar-tuning.sh"
   echo "    - REBOOT FINAL + espera (aplica pagefile + enlightenments)"
+  [ -n "$RUN_STRATEGY" ] && echo "  Pos: runStrategy -> $RUN_STRATEGY"
 }
 
 # ---------------------------------------------------------------- main
@@ -247,6 +256,28 @@ else
 fi
 
 reboot_and_wait "reboot-fase2-final"
+
+# runStrategy final (padrao de alguns clientes: RerunOnFailure). Patch minimo:
+# so muda spec.runStrategy, nao reinicia a VM (so muda a politica pros proximos
+# stops). Nota: se a VM ainda usar o campo antigo spec.running, este patch falha
+# (running e runStrategy sao mutuamente exclusivos); ai acrescente "running":null.
+if [ -n "$RUN_STRATEGY" ]; then
+  if done_step "set-runstrategy"; then
+    log "[set-runstrategy] ja' concluido (state), pulando."
+  else
+    cur=$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)
+    if [ "$cur" = "$RUN_STRATEGY" ]; then
+      log "[set-runstrategy] ja' e' $RUN_STRATEGY; nada a fazer."
+    else
+      log "Definindo runStrategy=$RUN_STRATEGY..."
+      "${OC[@]}" patch vm "$VM" -n "$NS" --type merge -p "{\"spec\":{\"runStrategy\":\"$RUN_STRATEGY\"}}" || die "falha ao setar runStrategy"
+      new=$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)
+      [ "$new" = "$RUN_STRATEGY" ] || die "runStrategy nao refletiu (got '$new')"
+      log "[set-runstrategy] runStrategy=$new"
+    fi
+    mark_step "set-runstrategy"
+  fi
+fi
 
 # ---------------------------------------------------------------- relatorio
 

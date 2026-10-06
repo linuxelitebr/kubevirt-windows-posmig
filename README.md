@@ -57,15 +57,29 @@ O que ele faz, nessa ordem: empurra o `.ps1` -> RemoveVMwareTools -> DisablePage
 -> [UpdateDrivers, só com `--drivers`] -> SetMTU -> **reboot + espera** ->
 EnablePageFile -> tuning Hyper-V (patch via `aplicar-tuning.sh`, sem reiniciar ali)
 -> **reboot final + espera** (esse único reboot aplica o pagefile reativado e os
-enlightenments de uma vez) -> verifica e reporta. Os dois reboots usam a mesma
+enlightenments de uma vez) -> [define o runStrategy, só com `--run-strategy`] ->
+verifica e reporta. Os dois reboots usam a mesma
 espera robusta: dispara o restart e só segue quando a VMI volta (nova instância)
 com o agente reconectado.
 
 Flags: `--drivers` (padrão off), `--media-source Auto|NAS|URL|Local`, `--media-file`
 (MSI único a empurrar pra fonte Local), `--nas-path UNC`, `--download-url URL`,
 `--local-media-path P` (pasta Local já preparada na VM), `--high-traffic`
-(multiqueue), `--script` (o `.ps1`, padrão ao lado), `--context`, `--fresh` (ignora
+(multiqueue), `--run-strategy Always|RerunOnFailure|Manual|Halted` (define o
+`spec.runStrategy` no fim), `--script` (o `.ps1`, padrão ao lado), `--context`, `--fresh` (ignora
 o state-file e recomeça), `--yes` (executa de verdade).
+
+Sobre `--run-strategy`: no fim do processo o governador seta o `spec.runStrategy`
+da VM (handoff pra produção; não reinicia a VM, só muda a política pros próximos
+stops). `RerunOnFailure` é o mais comum pra VM migrada: sobe de novo se der falha,
+mas respeita um desligamento limpo. Na mão:
+
+```bash
+oc patch vm VM -n NS --type merge -p '{"spec":{"runStrategy":"RerunOnFailure"}}'
+```
+
+Se a VM ainda usa o campo antigo `spec.running` (deprecado), o patch acima falha
+(os dois são mutuamente exclusivos); aí acrescente `"running":null` ao patch.
 
 **Idempotente.** Cada passo concluído fica gravado num state-file em
 `$TMPDIR/preparar-vm_NS_VM.state`. Se o governador for interrompido no meio (ctrl-C,
