@@ -80,7 +80,9 @@ oc patch vm VM -n NS --type merge -p '{"spec":{"runStrategy":"RerunOnFailure"}}'
 ```
 
 Se a VM ainda usa o campo antigo `spec.running` (deprecado), o patch acima falha
-(os dois são mutuamente exclusivos); aí acrescente `"running":null` ao patch.
+(os dois são mutuamente exclusivos); aí acrescente `"running":null` ao patch. O passo
+do governador é não-fatal: se o patch não aplicar, ele avisa e segue (o relatório mostra
+o runStrategy final), sem derrubar o resto do pós-migração.
 
 Sobre `--online-data-disks`: VM Windows migrada do VMware costuma trazer os discos
 de dados secundários **Offline** no primeiro boot (o Windows aplica a SAN policy

@@ -272,14 +272,18 @@ if [ -n "$RUN_STRATEGY" ]; then
     cur=$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)
     if [ "$cur" = "$RUN_STRATEGY" ]; then
       log "[set-runstrategy] ja' e' $RUN_STRATEGY; nada a fazer."
+      mark_step "set-runstrategy"
     else
       log "Definindo runStrategy=$RUN_STRATEGY..."
-      "${OC[@]}" patch vm "$VM" -n "$NS" --type merge -p "{\"spec\":{\"runStrategy\":\"$RUN_STRATEGY\"}}" || die "falha ao setar runStrategy"
-      new=$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)
-      [ "$new" = "$RUN_STRATEGY" ] || die "runStrategy nao refletiu (got '$new')"
-      log "[set-runstrategy] runStrategy=$new"
+      if "${OC[@]}" patch vm "$VM" -n "$NS" --type merge -p "{\"spec\":{\"runStrategy\":\"$RUN_STRATEGY\"}}" 2>/tmp/posmig-rs.err \
+        && [ "$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)" = "$RUN_STRATEGY" ]; then
+        log "[set-runstrategy] runStrategy=$RUN_STRATEGY"
+        mark_step "set-runstrategy"
+      else
+        warn "[set-runstrategy] NAO aplicado: $(tr '\n' ' ' < /tmp/posmig-rs.err 2>/dev/null)"
+        warn "[set-runstrategy] se a VM ainda usa spec.running, o patch minimo nao serve (adicione running:null; ver RUNBOOK). Nao-fatal, seguindo."
+      fi
     fi
-    mark_step "set-runstrategy"
   fi
 fi
 
@@ -293,4 +297,8 @@ echo "  VM: $NS/$VM"
 echo "  passos concluidos: $(tr '\n' ' ' < "$STATE")"
 [ -n "$HV" ] && echo "  enlightenments Hyper-V no dominio ativo: SIM" || echo "  enlightenments Hyper-V no dominio ativo: NAO (verifique)"
 echo "  VMI: ${MTU:-?}"
+if [ -n "$RUN_STRATEGY" ]; then
+  rs=$("${OC[@]}" get vm "$VM" -n "$NS" -o jsonpath='{.spec.runStrategy}' 2>/dev/null || true)
+  [ "$rs" = "$RUN_STRATEGY" ] && echo "  runStrategy: $rs" || echo "  runStrategy: ${rs:-<vazio>} (ALVO era $RUN_STRATEGY; NAO aplicado, veja os avisos acima)"
+fi
 log "Pos-migracao concluido. State: $STATE"
