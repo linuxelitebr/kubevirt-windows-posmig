@@ -230,6 +230,10 @@ dotted de `/23` é `255.255.254.0` (a de `/24` é `255.255.255.0`):
 guest-run -n NS -vm VM -ps 'netsh interface ip set address name="Ethernet" static 10.20.30.40 255.255.254.0 10.20.30.1'
 ```
 
+Nenhum dos dois comandos acima toca no resolver de DNS: ele é configuração à parte
+(`netsh interface ip set dnsservers` / `Set-DnsClientServerAddress`). Os servidores de
+DNS ficam como estão (medido: `set address` muda a máscara e deixa os DNS intactos).
+
 Depois de corrigir, limpe o ARP que a VM aprendeu errado e teste um alvo que estava
 inalcançável (troque pelo IP real que você precisa alcançar):
 
