@@ -65,7 +65,8 @@ com o agente reconectado.
 Flags: `--drivers` (padrão off), `--media-source Auto|NAS|URL|Local`, `--media-file`
 (MSI único a empurrar pra fonte Local), `--nas-path UNC`, `--download-url URL`,
 `--local-media-path P` (pasta Local já preparada na VM), `--high-traffic`
-(multiqueue), `--run-strategy Always|RerunOnFailure|Manual|Halted` (define o
+(multiqueue), `--online-data-disks` (discos de dados offline -> online),
+`--run-strategy Always|RerunOnFailure|Manual|Halted` (define o
 `spec.runStrategy` no fim), `--script` (o `.ps1`, padrão ao lado), `--context`, `--fresh` (ignora
 o state-file e recomeça), `--yes` (executa de verdade).
 
@@ -80,6 +81,19 @@ oc patch vm VM -n NS --type merge -p '{"spec":{"runStrategy":"RerunOnFailure"}}'
 
 Se a VM ainda usa o campo antigo `spec.running` (deprecado), o patch acima falha
 (os dois são mutuamente exclusivos); aí acrescente `"running":null` ao patch.
+
+Sobre `--online-data-disks`: VM Windows migrada do VMware costuma trazer os discos
+de dados secundários **Offline** no primeiro boot (o Windows aplica a SAN policy
+quando o controlador muda pra virtio). Essa flag, na Fase 1, traz os discos de
+dados offline (não-boot) pra online, limpa o readonly, e seta a política de disco
+novo pra `OnlineAll` (pra não recair num hotplug futuro). Na mão, dentro da VM:
+
+```powershell
+Get-Disk | Where-Object { $_.OperationalStatus -eq 'Offline' -and -not $_.IsBoot } |
+    ForEach-Object { Set-Disk -Number $_.Number -IsOffline $false; Set-Disk -Number $_.Number -IsReadOnly $false }
+```
+
+É opt-in porque trazer um disco online o torna gravável; tem que ser deliberado.
 
 **Idempotente.** Cada passo concluído fica gravado num state-file em
 `$TMPDIR/preparar-vm_NS_VM.state`. Se o governador for interrompido no meio (ctrl-C,

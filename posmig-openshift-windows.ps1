@@ -4,7 +4,7 @@
 param(
     [switch]$Force,
     [switch]$KeepNetworkAdapters,
-    [ValidateSet('Menu', 'RemoveVMwareTools', 'DisablePageFile', 'EnablePageFile', 'UpdateDrivers', 'SetMTU', 'Reboot')]
+    [ValidateSet('Menu', 'RemoveVMwareTools', 'DisablePageFile', 'EnablePageFile', 'UpdateDrivers', 'SetMTU', 'Reboot', 'OnlineDataDisks')]
     [string]$Action = 'Menu',
 
     # --- Driver source control (acao UpdateDrivers) ---
@@ -1641,6 +1641,63 @@ function Show-ActionMenu {
     } while ($true)
 }
 
+function Invoke-OnlineDataDisks {
+    Show-Banner
+    $script:OnlineRc = 0
+    Write-Log '=== Trazendo discos de dados offline para online ===' -Level Success
+    Write-Log "Executando em: $env:COMPUTERNAME"
+
+    # Politica para discos NOVOS: OnlineAll, para nao voltar a cair offline num
+    # hotplug futuro. Nao mexe nos discos ja existentes.
+    try {
+        Set-StorageSetting -NewDiskPolicy OnlineAll -ErrorAction Stop
+        Write-Log 'Politica de disco novo (NewDiskPolicy) definida como OnlineAll.' -Level Success
+    }
+    catch {
+        Write-Log "Nao foi possivel ajustar NewDiskPolicy: $($_.Exception.Message)" -Level Warning
+    }
+
+    $offline = @()
+    try {
+        $offline = @(Get-Disk -ErrorAction Stop | Where-Object { $_.OperationalStatus -eq 'Offline' -and -not $_.IsBoot -and -not $_.IsSystem })
+    }
+    catch {
+        Write-Log "Falha ao listar discos (Get-Disk): $($_.Exception.Message)" -Level Error
+        Write-Host 'RESULT: OnlineDataDisks status=FAILED onlined=0'
+        $script:OnlineRc = 20
+        return $script:OnlineRc
+    }
+
+    if ($offline.Count -eq 0) {
+        Write-Log 'Nenhum disco de dados offline encontrado. Nada a fazer.' -Level Success
+        Write-Host 'RESULT: OnlineDataDisks status=NOOP onlined=0'
+        return $script:OnlineRc
+    }
+
+    $done = 0; $fail = 0
+    foreach ($d in $offline) {
+        $gb = [math]::Round($d.Size / 1GB, 1)
+        try {
+            Write-Log "Disco $($d.Number) ($($d.FriendlyName), $gb GB): trazendo online..." -Level Info
+            Set-Disk -Number $d.Number -IsOffline $false -ErrorAction Stop
+            Set-Disk -Number $d.Number -IsReadOnly $false -ErrorAction SilentlyContinue
+            $done++
+            Write-Log "Disco $($d.Number) online." -Level Success
+        }
+        catch {
+            $fail++
+            Write-Log "Falha ao trazer o disco $($d.Number) online: $($_.Exception.Message)" -Level Warning
+        }
+    }
+
+    $letters = @(Get-Volume -ErrorAction SilentlyContinue | Where-Object { $_.DriveLetter } | ForEach-Object { "$($_.DriveLetter):" }) -join ' '
+    Write-Log "Volumes com letra agora: $letters" -Level Info
+    $status = if ($fail -gt 0) { 'PARTIAL' } else { 'SUCCESS' }
+    Write-Host "RESULT: OnlineDataDisks status=$status onlined=$done failed=$fail"
+    # best-effort: nao derruba o fluxo do pos-migracao por um disco; o RESULT reporta.
+    return $script:OnlineRc
+}
+
 Assert-Admin
 
 switch ($Action) {
@@ -1651,4 +1708,5 @@ switch ($Action) {
     'UpdateDrivers'     { [void](Invoke-UpdateDrivers -MediaSource $MediaSource -NasPath $NasPath -DownloadUrl $DownloadUrl -LocalMediaPath $LocalMediaPath); exit $script:DriverRc }
     'SetMTU'            { Invoke-SetEthernetMTU }
     'Reboot'            { Invoke-ImmediateReboot }
+    'OnlineDataDisks'   { [void](Invoke-OnlineDataDisks); exit $script:OnlineRc }
 }

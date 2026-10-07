@@ -27,6 +27,7 @@
 #   --download-url URL    URL base alternativa para a fonte URL
 #   --local-media-path P  pasta na VM com o MSI/EXE ja' colocado (fonte Local)
 #   --high-traffic        aplica tambem o tuning de multiqueue (VM de alto trafego)
+#   --online-data-disks   traz discos de dados offline para online (comum pos-V2V)
 #   --run-strategy X      no fim, define spec.runStrategy (Always|RerunOnFailure|Manual|Halted)
 #   --script ARQ          o .ps1 (padrao: posmig-openshift-windows.ps1 ao lado)
 #   --context CTX         contexto do oc/virtctl
@@ -37,13 +38,13 @@
 set -euo pipefail
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
-NS=""; VM=""; CTX=""; YES=0; DRIVERS=0; HIGH=0; FRESH=0
+NS=""; VM=""; CTX=""; YES=0; DRIVERS=0; HIGH=0; FRESH=0; ONLINE_DISKS=0
 MEDIA_SOURCE="Auto"; MEDIA_FILE=""
 NAS_PATH=""; DOWNLOAD_URL=""; LOCAL_MEDIA_PATH=""; RUN_STRATEGY=""
 SCRIPT_PS="$HERE/posmig-openshift-windows.ps1"
 TUNER="$HERE/aplicar-tuning.sh"
 
-usage() { sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,36p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 log()  { echo ">> $*"; }
 warn() { echo "!! $*" >&2; }
 die()  { echo "ERRO: $*" >&2; exit 1; }
@@ -61,6 +62,7 @@ while [ $# -gt 0 ]; do
     --local-media-path) LOCAL_MEDIA_PATH="$2"; shift 2 ;;
     --run-strategy) RUN_STRATEGY="$2"; shift 2 ;;
     --high-traffic) HIGH=1; shift ;;
+    --online-data-disks) ONLINE_DISKS=1; shift ;;
     --script)       SCRIPT_PS="$2"; shift 2 ;;
     --context)      CTX="$2"; shift 2 ;;
     --fresh)        FRESH=1; shift ;;
@@ -177,6 +179,7 @@ build_plan() {
     [ -n "$LOCAL_MEDIA_PATH" ] && echo "        LocalMediaPath=$LOCAL_MEDIA_PATH"
   fi
   echo "    - SetMTU (1500)"
+  [ "$ONLINE_DISKS" = 1 ] && echo "    - OnlineDataDisks (discos de dados offline -> online)"
   echo "    - REBOOT + espera"
   echo "  Fase 2:"
   echo "    - EnablePageFile"
@@ -238,6 +241,7 @@ if [ "$DRIVERS" = 1 ]; then
   run_action "update-drivers" "$drv" "0 10"
 fi
 run_action "set-mtu" "-Action SetMTU" "0"
+[ "$ONLINE_DISKS" = 1 ] && run_action "online-data-disks" "-Action OnlineDataDisks" "0"
 
 reboot_and_wait "reboot-fase1"
 
