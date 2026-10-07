@@ -113,6 +113,40 @@ guest-run -n NS -vm VM -ps '$gw=(Get-NetRoute -DestinationPrefix 0.0.0.0/0 | Sor
 Pinga mas a aplicação não fala? Suspeite de firewall ou de MTU (pacote pequeno passa,
 transferência grande morre). Veja os dois abaixo.
 
+### Pingar qualquer host (e testar porta TCP)
+
+Pra testar alcance a um IP qualquer (um host interno, um DNS público, o que for), é o
+`ping` de sempre ou o `Test-Connection`:
+
+```bash
+guest-run -n NS -vm VM -ps 'ping 1.1.1.1'
+```
+
+```bash
+guest-run -n NS -vm VM -ps 'Test-Connection -ComputerName 1.1.1.1 -Count 4 | Format-Table -AutoSize | Out-String -Width 200'
+```
+
+O `-Quiet` volta só `True`/`False`, bom pra script:
+
+```bash
+guest-run -n NS -vm VM -ps 'Test-Connection -ComputerName 1.1.1.1 -Count 2 -Quiet'
+```
+
+Dois cuidados pra não ler errado o resultado:
+
+- `1.1.1.1` (DNS público da Cloudflare) testa saída pra internet, não a rede interna. Em
+  rede corporativa o ICMP de saída pra internet costuma estar bloqueado no firewall,
+  então um `False` aqui pode ser o firewall, não a VM. Pra ver se a rede interna voltou,
+  pinga algo que deveria responder: o gateway, ou um host interno conhecido.
+- Se o ICMP estiver bloqueado mas você precisa saber se alcança um host numa porta (TCP),
+  use o `Test-NetConnection`, que não depende de ping:
+
+```bash
+guest-run -n NS -vm VM -ps 'Test-NetConnection -ComputerName 1.1.1.1 -Port 443 | Format-List ComputerName,RemoteAddress,TcpTestSucceeded'
+```
+
+`TcpTestSucceeded : True` = a porta responde, mesmo que o ping não passe.
+
 ### DNS
 
 ```bash
