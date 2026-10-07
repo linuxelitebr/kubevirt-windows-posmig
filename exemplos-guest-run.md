@@ -79,11 +79,12 @@ guest-run -n NS -vm VM -ps 'Get-NetIPAddress -AddressFamily IPv4 | Where-Object 
 ```
 
 Olhe o `PrefixLength`. O sinal de alerta é um IP `10.x` com prefixo `8` (ou um `172.x`
-com `8`/`16`): é o Windows aplicando o default classful quando a máscara se perde na
-migração. Na tabela de rotas isso aparece como uma linha on-link larga demais, tipo
-`10.0.0.0/8  0.0.0.0` em vez da sua sub-rede real (uma `/24`, por exemplo). Resultado: a
-VM acha que meio mundo é vizinho de rede, sai ARPando tudo direto e só fala com quem
-está no segmento físico de verdade. O conserto está em "Corrigir a máscara", abaixo.
+com `8`/`16`). Isso vem de dois jeitos: alguém digitou a máscara errada na configuração
+estática, ou o Windows caiu no default classful porque o IP foi aplicado sem a máscara
+(a migração às vezes traz o IP e perde a máscara). Na tabela de rotas aparece como uma
+linha on-link larga demais, tipo `10.0.0.0/8  0.0.0.0` em vez da sua sub-rede real. Com
+isso a VM acha que meio mundo é vizinho de rede, sai ARPando tudo direto e só fala com
+quem está no segmento físico de verdade. O conserto está em "Corrigir a máscara", abaixo.
 
 ### O gateway responde no nível 2 (ARP)?
 
@@ -200,35 +201,41 @@ guest-run -n NS -vm VM -ps 'powershell.exe -NoProfile -ExecutionPolicy Bypass -F
 Essa ação fixa o MTU em 1500 nas interfaces Ethernet. Se a sua rede usa outro valor, dá
 um grito que a gente parametriza.
 
-### Corrigir a máscara de rede (prefixo errado pós-migração)
+### Corrigir a máscara de rede (prefixo errado)
 
 Se o diagnóstico mostrou o prefixo errado (um `10.x` como `/8`, por exemplo), o conserto
 é cirúrgico e sem reboot: corrige só o prefixo, sem mexer no gateway nem no DNS. Troque o
 nome da placa, o IP e o prefixo pelos seus:
 
 ```bash
-guest-run -n NS -vm VM -ps 'Set-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 10.20.30.40 -PrefixLength 24 -ErrorAction Stop; Start-Sleep 2; Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Ethernet" | Format-List IPAddress,PrefixLength,PrefixOrigin,AddressState'
+guest-run -n NS -vm VM -ps 'Set-NetIPAddress -InterfaceAlias "Ethernet" -IPAddress 10.20.30.40 -PrefixLength 23 -ErrorAction Stop; Start-Sleep 2; Get-NetIPAddress -AddressFamily IPv4 -InterfaceAlias "Ethernet" | Format-List IPAddress,PrefixLength,PrefixOrigin,AddressState'
 ```
 
-A rota on-link se ajusta sozinha (a `/8` larga some, entra a `/24` certa) e a rota
+A rota on-link se ajusta sozinha (a `/8` larga some, entra a máscara certa) e a rota
 default pro gateway fica intacta. Confirme o `PrefixLength` na saída.
 
 Dois cuidados:
 
-- Confirme a máscara real ANTES. Um gateway terminado em `.254` quase sempre é `/24`,
-  mas confirme com a sua equipe de rede ou com outra máquina que funciona no mesmo
-  segmento. Prefixo errado troca um problema por outro.
+- Confirme a máscara real ANTES. Não dá pra deduzir pelo gateway: um `.254` tanto é `/24`
+  quanto `/23` ou mais largo. Pega o número com a equipe de rede ou de outra máquina que
+  funciona no mesmo segmento. Prefixo errado troca um problema por outro.
 - Isso vale pra IP estático (`PrefixOrigin` = `Manual`). Se vier `Dhcp`, não mexa na VM:
-  o prefixo veio do servidor DHCP, conserte a máscara no escopo lá.
+  o prefixo veio do servidor DHCP, conserte a máscara no escopo lá (e o próprio comando
+  acima falha num endereço DHCP, então ele não te deixa estragar).
 
-Alternativa atômica (seta IP, máscara e gateway de uma vez, também sem reboot):
+Alternativa atômica (seta IP, máscara e gateway de uma vez, também sem reboot). A máscara
+dotted de `/23` é `255.255.254.0` (a de `/24` é `255.255.255.0`):
 
 ```bash
-guest-run -n NS -vm VM -ps 'netsh interface ip set address name="Ethernet" static 10.20.30.40 255.255.255.0 10.20.30.1'
+guest-run -n NS -vm VM -ps 'netsh interface ip set address name="Ethernet" static 10.20.30.40 255.255.254.0 10.20.30.1'
 ```
 
-Depois de corrigir, limpe o ARP velho pra VM reaprender na hora (senão envelhece sozinho
-em alguns minutos): veja "Limpar cache de ARP e DNS".
+Depois de corrigir, limpe o ARP que a VM aprendeu errado e teste um alvo que estava
+inalcançável (troque pelo IP real que você precisa alcançar):
+
+```bash
+guest-run -n NS -vm VM -ps 'Get-NetNeighbor -AddressFamily IPv4 | Where-Object { $_.State -in "Incomplete","Unreachable" } | Remove-NetNeighbor -Confirm:$false -ErrorAction SilentlyContinue; Test-Connection -ComputerName 10.20.30.50 -Count 2 | Format-Table -AutoSize | Out-String -Width 200'
+```
 
 ### Limpar cache de ARP e DNS
 
