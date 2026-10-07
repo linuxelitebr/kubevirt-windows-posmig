@@ -14,6 +14,8 @@ Tools, pagefile, drivers, MTU) e o tuning no CLUSTER (enlightenments Hyper-V).
 | `aplicar-tuning.sh` | aplica os enlightenments Hyper-V no CLUSTER (autocontido) |
 | `hyperv-baseline.yaml` | o patch de baseline (referência; já embutido no .sh) |
 | `hyperv-tuning-adicional.yaml` | o patch opcional de alto tráfego (referência; já embutido no .sh) |
+| `ativar-nic.ps1` | religa placas de rede desativadas/ocultas pós-migração (avulso, best-effort) |
+| `exemplos-guest-run.md` | receituário de comandos avulsos via guest-run (diagnóstico de rede, reparos, ações do kit uma a uma) |
 
 A ferramenta `guest-run` (que dirige tudo) NÃO vem no kit: baixe o binário dos
 releases (ver Pré-requisitos) e ponha no PATH.
