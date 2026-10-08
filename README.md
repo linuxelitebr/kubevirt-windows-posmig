@@ -4,14 +4,23 @@ Prepara uma VM Windows recém-migrada do VMware pro OpenShift Virtualization pel
 canal do qemu-guest-agent. Duas partes: o trabalho DENTRO da VM (remover VMware 
 Tools, pagefile, drivers, MTU) e o tuning no CLUSTER (enlightenments Hyper-V).
 
-> **Contexto e segurança.** O `guest-run` executa comandos dentro da VM pelo canal do
-> qemu-guest-agent, com privilégio de `NT AUTHORITY\SYSTEM` no Windows (root no Linux): o
-> alcance é o de um administrador local da VM, então um comando destrutivo faz o mesmo
-> estrago que faria digitado no console. Por isso é acesso controlado por RBAC do
-> Kubernetes (`pods/exec` no pod virt-launcher), do mesmo jeito que você já controla quem
-> tem console ou RDP de administrador. Pra mais contexto e o modelo de segurança a fundo
-> (quem alcança o canal e por quê), veja o artigo
+> **Grandes poderes, grandes responsabilidades.** O `guest-run` executa comandos dentro
+> da VM pelo canal do qemu-guest-agent, com privilégio de `NT AUTHORITY\SYSTEM` no Windows
+> (root no Linux): o alcance é o de um administrador local da VM. Um comando destrutivo faz
+> o mesmo estrago que faria digitado no console, inclusive matar a VM. Na prática o
+> `format c:` até é recusado pelo SO (o volume do sistema fica travado enquanto roda), mas
+> apagar o carregador de boot na partição EFI derruba a máquina sem esforço.
+>
+> Isso NÃO significa que qualquer um pode fazer qualquer coisa. O caminho é fechado por
+> RBAC do Kubernetes: quem não tem `pods/exec` no pod virt-launcher não chega no canal, do
+> mesmo jeito que você já controla quem tem console ou RDP de administrador. E o que passa
+> por ele é rastreável: dá pra saber quem fez o quê. Trate o acesso como acesso de
+> administrador, porque é exatamente isso que ele é.
+>
+> Pra o modelo de segurança a fundo (quem alcança o canal e por quê), veja o artigo
 > [o guest-exec e o RBAC por trás dele](https://linuxelite.com.br/pt/blog/guest-exec-vm-no-network/).
+> Pra rastrear o uso (quem fez o quê, com que cliente e quando), veja
+> [who-did-what.md](https://github.com/linuxelitebr/kubevirt-day-2/blob/main/who-did-what.md).
 
 ## Conteúdo do kit
 
