@@ -4,6 +4,15 @@ Prepara uma VM Windows recém-migrada do VMware pro OpenShift Virtualization pel
 canal do qemu-guest-agent. Duas partes: o trabalho DENTRO da VM (remover VMware 
 Tools, pagefile, drivers, MTU) e o tuning no CLUSTER (enlightenments Hyper-V).
 
+> **Contexto e segurança.** O `guest-run` executa comandos dentro da VM pelo canal do
+> qemu-guest-agent, com privilégio de `NT AUTHORITY\SYSTEM` no Windows (root no Linux): o
+> alcance é o de um administrador local da VM, então um comando destrutivo faz o mesmo
+> estrago que faria digitado no console. Por isso é acesso controlado por RBAC do
+> Kubernetes (`pods/exec` no pod virt-launcher), do mesmo jeito que você já controla quem
+> tem console ou RDP de administrador. Pra mais contexto e o modelo de segurança a fundo
+> (quem alcança o canal e por quê), veja o artigo
+> [o guest-exec e o RBAC por trás dele](https://linuxelite.com.br/pt/blog/guest-exec-vm-no-network/).
+
 ## Conteúdo do kit
 
 | Arquivo | Para que |
