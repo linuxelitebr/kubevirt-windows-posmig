@@ -70,7 +70,7 @@ EnablePageFile -> tuning Hyper-V (patch via `aplicar-tuning.sh`, sem reiniciar a
 -> **reboot final + espera** (esse único reboot aplica o pagefile reativado e os
 enlightenments de uma vez) -> [define o runStrategy, só com `--run-strategy`] ->
 verifica e reporta. Os dois reboots usam a mesma
-espera robusta: dispara o restart e só segue quando a VMI volta (nova instância)
+espera: dispara o restart e só segue quando a VMI volta (nova instância)
 com o agente reconectado.
 
 Flags: `--drivers` (padrão off), `--media-source Auto|NAS|URL|Local`, `--media-file`
